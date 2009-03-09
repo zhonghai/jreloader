@@ -1,0 +1,5 @@
+= Frequently Asked Questions =
+
+*Can I run JBoss, Tomcat, etc. with JReloader?*
+
+Yes you can. Personally, I've been using it with Tomcat6 and JBoss4.
