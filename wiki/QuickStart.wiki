@@ -2,7 +2,7 @@
 
 == Step 1 ==
 
-It is very easy to integrate JReloader with you application. Just download and explode the zip file somewhere in your filesystem.
+Download and explode the zip file somewhere in your filesystem.
 
 == Step 2 ==
 
