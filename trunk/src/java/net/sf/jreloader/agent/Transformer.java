@@ -1,13 +1,9 @@
 /*
- * Copyright 2006 Antonio S. R. Gomes
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
- * file except in compliance with the License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under
- * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * Copyright 2006 Antonio S. R. Gomes Licensed under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License. You may
+ * obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 Unless
+ * required by applicable law or agreed to in writing, software distributed under the
+ * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  * KIND, either express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
@@ -21,16 +17,17 @@ import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
+import java.lang.instrument.UnmodifiableClassException;
 import java.lang.ref.WeakReference;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Class file transformer (this class is tricky).
- * 
  * @author Antonio S. R. Gomes
  */
 public class Transformer implements ClassFileTransformer {
@@ -41,7 +38,7 @@ public class Transformer implements ClassFileTransformer {
     private ReloadThread thread;
 
     public Transformer() {
-	
+
         String[] dirNames = System.getProperty("jreloader.dirs", ".").split("\\,");
 
         for (String dirName : dirNames) {
@@ -49,6 +46,7 @@ public class Transformer implements ClassFileTransformer {
             log.info("Added class dir '" + d.getAbsolutePath() + "'");
             scan(d, d);
         }
+        findGroups();
         log.info(" \\-- Found " + entries.size() + " classes");
         thread = new ReloadThread();
         thread.start();
@@ -67,12 +65,24 @@ public class Transformer implements ClassFileTransformer {
                 if (file.isFile()) {
                     Entry e = new Entry();
                     e.name = nameOf(base, file);
+                    log.debug(" found class " + e.name);
                     e.file = file;
                     e.lastModified = file.lastModified();
                     entries.put(e.name, e);
                 } else {
                     scan(base, file);
                 }
+            }
+        }
+    }
+
+    private void findGroups() {
+        for (java.util.Map.Entry<String, Entry> e : entries.entrySet()) {
+            String n = e.getValue().name;
+            int p = n.indexOf('$');
+            if (p != -1) {
+                String parentName = n.substring(0, p);
+                entries.get(parentName).addChild(e.getValue());
             }
         }
     }
@@ -86,16 +96,49 @@ public class Transformer implements ClassFileTransformer {
     }
 
     private class Entry {
+
         String name;
         File file;
         long lastModified;
+        List<Entry> children;
+        Entry parent;
+        WeakReference<ClassLoader> loaderRef;
+
+        void addChild(Entry e) {
+            children = (children == null) ? new ArrayList<Entry>() : children;
+            children.add(e);
+            e.parent = this;
+        }
+
         boolean isDirty() {
             return file.lastModified() > lastModified;
         }
+
         void clearDirty() {
             lastModified = file.lastModified();
+            if (children != null) {
+                for (Entry e : children) {
+                    e.lastModified = file.lastModified();
+                }
+            }
         }
-        WeakReference<ClassLoader> loaderRef;
+
+        /**
+         *
+         */
+        public void forceDirty() {
+            if (parent == null) {
+                lastModified = 0;
+                if (children != null) {
+                    for (Entry e : children) {
+                        e.lastModified = 0;
+                    }
+                }
+            } else {
+                parent.forceDirty();
+            }
+        }
+
     }
 
     public byte[] transform(ClassLoader loader,
@@ -136,28 +179,18 @@ public class Transformer implements ClassFileTransformer {
                     sleep(3000);
                 } catch (InterruptedException e) {
                 }
-                // log.debug("Checking changes...");
-                List<Entry> list = new ArrayList<Entry>(entries.values());
-                for (Entry e : list) {
+                log.debug("Checking changes...");
+                List<Entry> aux = new ArrayList<Entry>(entries.values());
+                for (Entry e : aux) {
                     if (e.isDirty()) {
+                        e.forceDirty();
+                    }
+                }
+                for (Entry e : aux) {
+                    if (e.isDirty() && e.parent == null) {
                         log.debug("Reloading " + e.name);
                         try {
-                            if (e.loaderRef != null) {
-                                ClassLoader cl = e.loaderRef.get();
-                                if (cl != null) {
-                                    byte[] bytes = loadBytes(e.file);
-                                    Class<?> clazz = cl.loadClass(e.name
-                                        .replace('/', '.'));
-                                    log.info("Requesting reload of " + e.name);
-                                    Agent.inst.redefineClasses(new ClassDefinition(clazz,
-                                            bytes));
-                                    System.err
-                                    .println("[JReloader:INFO ] Reloaded class "
-                                            + e.name.replace('/', '.'));
-                                } else {
-                                    e.loaderRef = null;
-                                }
-                            }
+                            reload(e);
                         } catch (Throwable t) {
                             log.error("Could not reload " + e.name, t);
                             System.err
@@ -169,6 +202,38 @@ public class Transformer implements ClassFileTransformer {
                 }
             }
         }
+
+        private List<ClassDefinition> cdefs = new LinkedList<ClassDefinition>();
+
+        private void reload(Entry e)
+            throws IOException, ClassNotFoundException, UnmodifiableClassException {
+            cdefs.clear();
+            if (e.loaderRef != null) {
+                ClassLoader cl = e.loaderRef.get();
+                if (cl != null) {
+                    request(e, cl);
+                    if (e.children != null) {
+                        for (Entry ce : e.children) {
+                            request(ce, cl);
+                        }
+                    }
+                    Agent.inst.redefineClasses(cdefs.toArray(new ClassDefinition[0]));
+                } else {
+                    e.loaderRef = null;
+                }
+            }
+        }
+
+        private void request(Entry e, ClassLoader cl)
+            throws IOException, ClassNotFoundException {
+            byte[] bytes = loadBytes(e.file);
+            String className = e.name.replace('/', '.');//.replace('$', '.');
+            Class<?> clazz = cl.loadClass(className);
+            log.info("Requesting reload of " + e.name);
+            System.out.println("[JReloader:INFO ] Reloading class " + className);
+            cdefs.add(new ClassDefinition(clazz, bytes));
+        }
+
     }
 
     public static byte[] loadBytes(File classFile) throws IOException {
