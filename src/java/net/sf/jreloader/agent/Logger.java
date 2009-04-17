@@ -1,11 +1,11 @@
 /*
  * Copyright 2006 Antonio S. R. Gomes
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
  * file except in compliance with the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under
  * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  * KIND, either express or implied. See the License for the specific language governing
@@ -20,7 +20,7 @@ import java.util.Date;
 
 /**
  * CLASS_COMMENT
- * 
+ *
  * @author Antonio S. R. Gomes
  */
 public class Logger {
@@ -31,14 +31,15 @@ public class Logger {
 
     private static PrintWriter out;
 
-    private static Level level = Level.DEBUG;;
+    private static Level level = Level.DEBUG;
+
     public static void setLevel(Level level) {
         Logger.level = level;
     }
 
     static {
         try {
-            String fileName = System.getProperty("jreload.logFile", "jreload.log");
+            String fileName = System.getProperty("jreloader.logFile", "jreloader.log");
             out = new PrintWriter(fileName);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -67,13 +68,13 @@ public class Logger {
     }
 
     public void error(String message, Throwable t) {
-        print(Level.ERROR, message, t);        
+        print(Level.ERROR, message, t);
     }
-    
+
     private void print(Level level, String message) {
         print(level, message, null);
     }
-    
+
     private void print(Level level, String message, Throwable t) {
         if (out != null && level.ordinal()>= Logger.level.ordinal()) {
             Date now = new Date();
