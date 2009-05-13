@@ -115,10 +115,11 @@ public class Transformer implements ClassFileTransformer {
         }
 
         void clearDirty() {
+            // System.err.println("clearDirty: " + name);
             lastModified = file.lastModified();
             if (children != null) {
                 for (Entry e : children) {
-                    e.lastModified = file.lastModified();
+                    e.lastModified = e.file.lastModified();
                 }
             }
         }
@@ -179,6 +180,9 @@ public class Transformer implements ClassFileTransformer {
                     sleep(3000);
                 } catch (InterruptedException e) {
                 }
+                if (System.getProperty("jreloader.pauseReload") != null) {
+                    continue;
+                }
                 log.debug("Checking changes...");
                 List<Entry> aux = new ArrayList<Entry>(entries.values());
                 for (Entry e : aux) {
@@ -207,6 +211,7 @@ public class Transformer implements ClassFileTransformer {
 
         private void reload(Entry e)
             throws IOException, ClassNotFoundException, UnmodifiableClassException {
+            System.err.println(e.file);
             cdefs.clear();
             if (e.loaderRef != null) {
                 ClassLoader cl = e.loaderRef.get();
@@ -217,6 +222,7 @@ public class Transformer implements ClassFileTransformer {
                             request(ce, cl);
                         }
                     }
+                    // System.err.println(cdefs);
                     Agent.inst.redefineClasses(cdefs.toArray(new ClassDefinition[0]));
                 } else {
                     e.loaderRef = null;
@@ -227,7 +233,7 @@ public class Transformer implements ClassFileTransformer {
         private void request(Entry e, ClassLoader cl)
             throws IOException, ClassNotFoundException {
             byte[] bytes = loadBytes(e.file);
-            String className = e.name.replace('/', '.');//.replace('$', '.');
+            String className = e.name.replace('/', '.');
             Class<?> clazz = cl.loadClass(className);
             log.info("Requesting reload of " + e.name);
             System.out.println("[JReloader:INFO ] Reloading class " + className);
