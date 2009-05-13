@@ -76,6 +76,11 @@ public class Logger {
     }
 
     private void print(Level level, String message, Throwable t) {
+        print0(out, level, message, t);
+        //print0(new PrintWriter(System.err), level, message, t);
+    }
+
+    private void print0(PrintWriter out, Level level, String message, Throwable t) {
         if (out != null && level.ordinal()>= Logger.level.ordinal()) {
             Date now = new Date();
             out.format("%s %-5s [%s] - %s",
