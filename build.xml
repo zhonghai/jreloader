@@ -34,7 +34,9 @@
 				<fileset dir="lib" includes="*.jar" />
 			</classpath>
 		</javac>
+		<!--
 		<mkdir dir="${deploy.dir}/lib" />
+		-->
 		<copy file="LICENSE-2.0.txt" todir="${deploy.dir}" />
 		<copy file="CHANGELOG.txt" todir="${deploy.dir}" />
 		<copy file="INSTALL.txt" todir="${deploy.dir}" />
