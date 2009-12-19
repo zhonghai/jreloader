@@ -2,4 +2,4 @@
 
 *Can I run JBoss, Tomcat, etc. with JReloader?*
 
-Yes you can. Personally, I've been using it with Tomcat6 and JBoss4.
+Yes you can. Personally, I've been using it with Tomcat6, JBoss4, JBoss5, from small applications to fairly big ones with multiple EARs/WARs and hundreds of EJBs per module, including tens of class directories. The performance impact is negligible.
